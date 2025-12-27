@@ -284,16 +284,16 @@ export default function RacingGame() {
 
   if (gameState === "landing") {
     return (
-      <div className="w-full h-full bg-black flex flex-col items-center justify-center font-arcade relative overflow-hidden crt-overlay">
-        <h1 className="text-6xl md:text-8xl text-neon-pink text-neon-pink mb-8 animate-pulse">RACING SIM</h1>
+      <div className="landing-screen crt-overlay">
+        <h1 className="landing-title">RACING SIM</h1>
         
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-sm text-neon-blue uppercase tracking-widest">
+        <div className="landing-attribution">
           by Manish Sai Yella
         </div>
 
         <Button 
           onClick={() => setGameState("playing")}
-          className="absolute bottom-10 right-10 bg-transparent border-2 border-neon-blue text-neon-blue hover:bg-neon-blue/20 px-8 py-6 text-2xl h-auto no-default-hover-elevate"
+          className="landing-next-btn font-arcade no-default-hover-elevate"
         >
           NEXT ▶
         </Button>
@@ -306,14 +306,24 @@ export default function RacingGame() {
 
   return (
     <div className="w-full h-full relative bg-black crt-overlay">
-      <Canvas shadows dpr={[1, 2]} gl={{ antialias: false }}>
+      <Canvas 
+        shadows 
+        dpr={[1, 2]} 
+        gl={{ antialias: false }}
+        camera={{ position: [0, 5, 10], fov: 50 }}
+      >
         {/* Environment Lighting */}
-        <ambientLight intensity={0.4} />
-        <directionalLight position={[0, 10, -5]} intensity={1.5} castShadow />
+        <ambientLight intensity={0.5} />
+        <directionalLight 
+          position={[0, 10, -5]} 
+          intensity={1.5} 
+          castShadow 
+          shadow-mapSize={[1024, 1024]}
+        />
         <pointLight position={[0, 50, 0]} intensity={1} color="#4400ff" />
         
         {/* Fog for distance hiding */}
-        <fog attach="fog" args={['#0a0a0a', 20, 150]} />
+        <fog attach="fog" args={['#000000', 30, 150]} />
         
         {/* Game Content */}
         <GameController />

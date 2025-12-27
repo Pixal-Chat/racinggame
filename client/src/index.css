@@ -54,6 +54,25 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Press Start 2P', cursive;
   }
+
+  .landing-screen {
+    @apply fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center font-arcade overflow-hidden;
+  }
+
+  .landing-title {
+    @apply text-6xl md:text-8xl text-neon-pink mb-8 animate-pulse;
+    text-shadow: 0 0 20px hsl(var(--neon-pink)), 0 0 40px hsl(var(--neon-pink));
+  }
+
+  .landing-attribution {
+    @apply absolute bottom-10 left-1/2 -translate-x-1/2 text-sm text-neon-blue uppercase tracking-widest;
+    text-shadow: 0 0 10px hsl(var(--neon-blue));
+  }
+
+  .landing-next-btn {
+    @apply absolute bottom-10 right-10 bg-transparent border-2 border-neon-blue text-neon-blue hover:bg-neon-blue/20 px-8 py-6 text-2xl h-auto transition-all duration-300;
+    box-shadow: 0 0 15px hsl(var(--neon-blue) / 0.5);
+  }
 }
 
 @layer utilities {
