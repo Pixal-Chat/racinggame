@@ -1,0 +1,99 @@
+Refine and fix the existing racing game implementation.
+
+KEEP all existing UI, dashboard layout, colors, fonts, and retro aesthetic.
+DO NOT remove or redesign the right-side SYSTEMS dashboard.
+
+Critical fixes and additions:
+
+========================
+1. LANDING SCREEN (FIRST LOAD)
+========================
+- On initial load, show a fullscreen landing screen.
+- Black/dark background.
+- Large centered arcade-style text: "RACING SIM".
+- Use a retro arcade font (e.g., Press Start 2P or pixel font).
+- Bottom center text: "by Manish Sai Yella" in the same arcade font, smaller.
+- Bottom-right button: "NEXT ▶".
+- Neon glow / retro arcade styling.
+- The Three.js game MUST NOT initialize until NEXT is clicked.
+- Clicking NEXT hides the landing screen and starts the game without page reload.
+
+========================
+2. CAR VISIBILITY (VERY IMPORTANT)
+========================
+- The car must be clearly visible at all times.
+- Use a bright, high-contrast color (red, cyan, or neon magenta).
+- Give the car:
+  - Strong ambient light
+  - Directional light from above and behind
+  - Subtle emissive material so it is visible even in dark scenes
+- Add a visible roof and rear so the top of the car can be seen.
+
+========================
+3. CAMERA (REAR CHASE VIEW)
+========================
+- Camera must follow BEHIND and ABOVE the car.
+- The TOP of the car must be visible.
+- The road ahead must be clearly visible.
+- Camera offset example (relative to car):
+  - height: +3 to +4 units
+  - distance behind: -7 to -9 units
+- Camera must smoothly lerp to position (cinematic follow).
+- Camera should look slightly ahead of the car, not directly at center.
+
+========================
+4. TRACK & ENVIRONMENT VISIBILITY
+========================
+- Road surface must be clearly visible:
+  - Dark asphalt but lighter than background
+  - Neon edge lines or grid for contrast
+- Add subtle ambient fog or horizon glow so scene is not pure black.
+- Ensure ground plane and track are lit enough to see direction of travel.
+
+========================
+5. DASHBOARD (KEEP AS IS)
+========================
+- Keep the existing SYSTEMS dashboard exactly as it is.
+- Keep:
+  - Speed display
+  - Gear indicator
+  - Lap time
+  - Best lap
+  - Drive mode selector
+  - HP slider
+  - TCS slider
+  - ESP slider
+  - Any existing controls
+- Controls must continue to affect car behavior in real time.
+
+========================
+6. CONTROLS (KEYBOARD ONLY)
+========================
+- W / Arrow Up = throttle
+- S / Arrow Down = brake
+- A / Arrow Left = steer left
+- D / Arrow Right = steer right
+- No mouse, no controller.
+
+========================
+7. PHYSICS (ARCADE-SIM FEEL)
+========================
+- Arcade-style physics with believable weight.
+- Grip-based turning.
+- Simple slip detection.
+- TCS reduces throttle on high slip.
+- ESP gently corrects oversteer.
+- Drive modes change grip, throttle response, and ESP strength.
+
+========================
+8. PERFORMANCE & STRUCTURE
+========================
+- Use Three.js via CDN.
+- Use a single render loop.
+- Organize code cleanly with comments.
+- The app must run immediately after clicking NEXT.
+
+The most important fixes are:
+1) Make the car clearly visible.
+2) Fix the chase camera so the top of the car and road ahead are visible.
+3) Do NOT break the dashboard UI.

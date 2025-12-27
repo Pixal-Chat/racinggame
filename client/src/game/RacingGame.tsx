@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGameStore } from "./GameStore";
 import { useCreateLap } from "@/hooks/use-laps";
+import { Button } from "@/components/ui/button";
 
 // --- Constants & Config ---
 const TRACK_RADIUS = 80;
@@ -19,23 +20,23 @@ function createRoadTexture() {
   if (!ctx) return new THREE.CanvasTexture(canvas);
 
   // Asphalt base
-  ctx.fillStyle = "#1a1a1a";
+  ctx.fillStyle = "#222222"; // Slightly lighter than background
   ctx.fillRect(0, 0, 512, 512);
 
   // Noise
   for (let i = 0; i < 5000; i++) {
-    ctx.fillStyle = Math.random() > 0.5 ? "#222" : "#111";
+    ctx.fillStyle = Math.random() > 0.5 ? "#2a2a2a" : "#1a1a1a";
     ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
   }
 
   // Neon Side Lines
   ctx.fillStyle = "#0ff"; // Cyan neon
-  ctx.fillRect(0, 0, 10, 512); // Left line
+  ctx.fillRect(0, 0, 15, 512); // Left line
   ctx.fillStyle = "#f0f"; // Magenta neon
-  ctx.fillRect(502, 0, 10, 512); // Right line
+  ctx.fillRect(497, 0, 15, 512); // Right line
   
   // Center dashed line
-  ctx.fillStyle = "#444";
+  ctx.fillStyle = "#555";
   for(let i=0; i<512; i+=40) {
     ctx.fillRect(254, i, 4, 20);
   }
@@ -73,7 +74,7 @@ function Track() {
 function GridFloor() {
   return (
     <gridHelper 
-      args={[400, 40, 0xff00ff, 0x222222]} 
+      args={[1000, 100, 0xff00ff, 0x111111]} 
       position={[0, -0.1, 0]} 
     />
   );
@@ -82,15 +83,20 @@ function GridFloor() {
 function Car({ carRef }: { carRef: React.MutableRefObject<THREE.Group | null> }) {
   return (
     <group ref={carRef} position={[TRACK_RADIUS, 0.5, 0]}>
-      {/* Chassis */}
+      {/* Chassis - Red/Neon Magenta */}
       <mesh position={[0, 0.3, 0]} castShadow>
         <boxGeometry args={[CAR_WIDTH, 0.6, CAR_LENGTH]} />
-        <meshStandardMaterial color="#ff0044" roughness={0.2} metalness={0.8} />
+        <meshStandardMaterial 
+          color="#ff00ff" 
+          emissive="#330033" 
+          roughness={0.2} 
+          metalness={0.8} 
+        />
       </mesh>
       
-      {/* Cabin */}
-      <mesh position={[0, 0.8, -0.2]} castShadow>
-        <boxGeometry args={[CAR_WIDTH - 0.2, 0.5, CAR_LENGTH - 1.2]} />
+      {/* Cabin/Roof - clearly visible top */}
+      <mesh position={[0, 0.75, -0.2]} castShadow>
+        <boxGeometry args={[CAR_WIDTH - 0.2, 0.45, CAR_LENGTH - 1.2]} />
         <meshStandardMaterial color="#111" roughness={0.0} metalness={1.0} />
       </mesh>
       
@@ -114,16 +120,8 @@ function Car({ carRef }: { carRef: React.MutableRefObject<THREE.Group | null> })
          <meshStandardMaterial color="#f00" emissive="#f00" emissiveIntensity={3} />
       </mesh>
       
-      {/* Spotlight for headlights */}
-      <spotLight 
-        position={[0, 1, 1]} 
-        angle={0.5} 
-        penumbra={0.5} 
-        intensity={20} 
-        distance={50} 
-        castShadow 
-        target-position={[0, 0, 10]}
-      />
+      {/* Car specific lighting to ensure visibility */}
+      <pointLight position={[0, 2, 0]} intensity={2} color="#ffffff" distance={10} />
     </group>
   );
 }
@@ -178,16 +176,14 @@ function GameController() {
     // --- 2. Physics Model ---
     
     // Power & Drag
-    // HP converted to acceleration force roughly
     const maxSpeed = settings.horsepower * 0.6 * (settings.drs ? 1.2 : 1.0) + (settings.ers ? 50 : 0);
     const accelForce = (settings.horsepower / 20) * throttle * (settings.ers ? 1.5 : 1.0);
-    const brakeForce = settings.driveMode === 'drift' ? 80 : 120; // Drift mode has weaker brakes for initiation
+    const brakeForce = settings.driveMode === 'drift' ? 80 : 120;
     const drag = p.speed * 0.02 * (settings.drs ? 0.5 : 1.0);
     const rollingResist = 5;
 
     // Apply forces
     if (throttle > 0) {
-      // Traction Control limiting
       const maxAccel = 100 * (0.2 + 0.8 * settings.tractionControl);
       const effectiveAccel = Math.min(accelForce, maxAccel);
       p.speed += effectiveAccel * dt;
@@ -197,114 +193,75 @@ function GameController() {
       p.speed -= brakeForce * dt;
     }
     
-    // Natural deceleration
     p.speed -= (drag + rollingResist) * dt;
-    
-    // Clamp speed (no reverse for simplicity in this arcade version, just 0)
     if (p.speed < 0) p.speed = 0;
     if (p.speed > maxSpeed) p.speed = maxSpeed;
 
     // Steering & Drifting
     const steerSens = 1.5;
-    const grip = settings.driveMode === 'drift' ? 0.95 : 0.99; // Lower grip threshold for drift
-    const speedFactor = p.speed / 100;
+    const grip = settings.driveMode === 'drift' ? 0.95 : 0.99;
     
-    // Base turning
     let turnRate = steer * steerSens * dt;
-    
-    // Drift mechanics
-    const driftThreshold = 0.6 * settings.esp; // ESP fights drift
+    const driftThreshold = 0.6 * settings.esp;
     if (Math.abs(turnRate) > 0.02 && p.speed > 50 && Math.random() > grip) {
-        // We are drifting!
         p.driftAngle += turnRate * 2; 
     } else {
-        // Recovery
-        p.driftAngle *= 0.95; // Return to center
+        p.driftAngle *= 0.95; 
     }
-    
-    // Clamp drift
     p.driftAngle = Math.max(Math.min(p.driftAngle, 0.5), -0.5);
     
-    // Update car heading
-    // Visual car rotation vs actual movement vector
-    // For a ring track, "forward" changes constantly.
-    // We calculate position in polar coordinates.
-    
-    // Angular velocity (radians per second) = linear velocity / radius
-    const angularVelocity = (p.speed / 3.6) / TRACK_RADIUS; // km/h -> m/s
+    const angularVelocity = (p.speed / 3.6) / TRACK_RADIUS;
     p.angle += angularVelocity * dt;
     
-    // Lateral movement (steering moves you in/out from center)
     p.lateralOffset += steer * (p.speed / 50) * dt * 5;
-    // Clamp to track width
-    p.lateralOffset = Math.max(Math.min(p.lateralOffset, TRACK_WIDTH/2 - 1), -(TRACK_WIDTH/2 - 1));
+    p.lateralOffset = Math.max(Math.min(p.lateralOffset, TRACK_WIDTH/2 - 1.5), -(TRACK_WIDTH/2 - 1.5));
 
     // --- 3. Position Update ---
-    
-    // Polar to Cartesian
-    // X = (R + offset) * cos(angle)
-    // Z = (R + offset) * sin(angle)
     const r = TRACK_RADIUS + p.lateralOffset;
     const x = r * Math.cos(p.angle);
     const z = r * Math.sin(p.angle);
-    
     carRef.current.position.set(x, 0.5, z);
     
-    // Rotation: Car must face tangent to circle + drift angle
-    // Tangent angle is p.angle + PI/2 (counter-clockwise)
     const tangent = p.angle + Math.PI / 2;
-    carRef.current.rotation.y = -tangent + p.driftAngle; // ThreeJS Y is up
+    carRef.current.rotation.y = -tangent + p.driftAngle;
     
-    // --- 4. Camera Follow ---
-    // Ideal camera position: behind car, slightly up
-    // Behind means -tangent direction
-    const camDist = 12 + (p.speed / 20); // Dynamic camera distance based on speed
-    const camHeight = 4 + (p.speed / 50);
+    // --- 4. Camera Follow (Rear Chase View) ---
+    // Fix: distance behind (-7 to -9), height (+3 to +4)
+    const camDistBehind = 8;
+    const camHeightAbove = 3.5;
     
-    const cx = x - Math.cos(tangent) * -camDist; // Wait, -tangent points forward? 
-    // Tangent points along track. We want opposite.
-    // x position is r*cos(angle). Tangent vector is (-sin, cos).
-    // Let's just use trigonometry relative to car position.
+    // Position behind the car relative to its tangent
+    const targetCamX = x - Math.cos(tangent) * camDistBehind;
+    const targetCamZ = z - Math.sin(tangent) * camDistBehind;
+    const targetCamY = camHeightAbove;
     
-    // Simpler: Camera is at larger radius, same angle? No, that looks static.
-    // It needs to trail.
+    // Smooth follow
+    camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.1);
     
-    const trailAngle = p.angle - 0.15; // Lags behind in angle
-    const camX = (TRACK_RADIUS + p.lateralOffset * 0.5) * Math.cos(trailAngle); // dampened lateral follow
-    const camZ = (TRACK_RADIUS + p.lateralOffset * 0.5) * Math.sin(trailAngle);
-    
-    // Lerp camera
-    camera.position.x += (camX - camera.position.x) * 0.1;
-    camera.position.z += (camZ - camera.position.z) * 0.1;
-    camera.position.y += (camHeight - camera.position.y) * 0.1;
-    camera.lookAt(x, 0, z);
+    // Look slightly ahead of the car
+    const lookAheadDist = 5;
+    const lookAtX = x + Math.cos(tangent) * lookAheadDist;
+    const lookAtZ = z + Math.sin(tangent) * lookAheadDist;
+    camera.lookAt(lookAtX, 1, lookAtZ);
 
     // --- 5. Lap Timing & Telemetry ---
     const now = Date.now();
     const currentLapTime = now - p.lapStartTime;
     
-    // Check lap completion (angle crosses 2PI)
     if (p.angle >= Math.PI * 2 * (p.currentLap + 1)) {
         p.currentLap++;
-        
-        // Save Lap
         const lapTimeMs = currentLapTime;
         saveLap({ 
           lapTimeMs, 
           displayTime: new Date(lapTimeMs).toISOString().slice(14, 23)
         });
-        
-        // Reset timer
         p.lapStartTime = now;
-        
-        // Update best
         const currentBest = useGameStore.getState().telemetry.bestLapTime;
         if (currentBest === 0 || lapTimeMs < currentBest) {
            updateTelemetry({ bestLapTime: lapTimeMs });
         }
     }
 
-    // Update UI Store (throttled slightly naturally by frame rate, but okay for this)
     updateTelemetry({
       speed: Math.abs(p.speed),
       gear: Math.min(6, Math.max(1, Math.floor(Math.abs(p.speed) / 40) + 1)),
@@ -323,15 +280,40 @@ function GameController() {
 
 
 export default function RacingGame() {
+  const [gameState, setGameState] = useState<"landing" | "playing">("landing");
+
+  if (gameState === "landing") {
+    return (
+      <div className="w-full h-full bg-black flex flex-col items-center justify-center font-arcade relative overflow-hidden crt-overlay">
+        <h1 className="text-6xl md:text-8xl text-neon-pink text-neon-pink mb-8 animate-pulse">RACING SIM</h1>
+        
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-sm text-neon-blue uppercase tracking-widest">
+          by Manish Sai Yella
+        </div>
+
+        <Button 
+          onClick={() => setGameState("playing")}
+          className="absolute bottom-10 right-10 bg-transparent border-2 border-neon-blue text-neon-blue hover:bg-neon-blue/20 px-8 py-6 text-2xl h-auto no-default-hover-elevate"
+        >
+          NEXT ▶
+        </Button>
+
+        {/* Retro scanline bg effect */}
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-purple-500/5 to-transparent bg-[length:100%_20px]" />
+      </div>
+    );
+  }
+
   return (
     <div className="w-full h-full relative bg-black crt-overlay">
       <Canvas shadows dpr={[1, 2]} gl={{ antialias: false }}>
-        {/* Lights */}
-        <ambientLight intensity={0.2} />
+        {/* Environment Lighting */}
+        <ambientLight intensity={0.4} />
+        <directionalLight position={[0, 10, -5]} intensity={1.5} castShadow />
         <pointLight position={[0, 50, 0]} intensity={1} color="#4400ff" />
         
         {/* Fog for distance hiding */}
-        <fog attach="fog" args={['#0a0a0a', 10, 100]} />
+        <fog attach="fog" args={['#0a0a0a', 20, 150]} />
         
         {/* Game Content */}
         <GameController />
@@ -345,3 +327,4 @@ export default function RacingGame() {
     </div>
   );
 }
+
