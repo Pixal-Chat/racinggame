@@ -1,0 +1,80 @@
+Update the visuals and driving behavior while keeping the current handling feel and UI/dashboard exactly the same.
+
+DO NOT redesign the SYSTEMS dashboard UI. Keep the current acceleration zoom-out effect.
+
+========================
+A) VISUAL STYLE: NORMAL COLORS + PIXEL LOOK
+========================
+- Replace neon grid/retro synth colors with more normal racing colors:
+  - Track asphalt: near-black / dark gray
+  - Track edge lines: white
+  - Kerbs: red/white
+  - Grass: green
+  - Barriers: gray with some red/white blocks
+- Car color: solid red.
+- Make the car and track look "pixel / low-poly / retro arcade":
+  - Use nearest-neighbor pixel textures (no smoothing) for track and car details.
+  - Keep geometry simple but add pixel-like texture detail to the car (windows, lights) using a small texture atlas or simple pixel pattern.
+- Add simple scenery:
+  - left and right barriers along the track (continuous or segmented)
+  - occasional stands / grandstands (simple blocky meshes) near a few sections
+  - optional trees as low-poly cones/cylinders (keep lightweight)
+
+Implementation detail:
+- Use THREE.TextureLoader with a small generated pixel texture (can be created using canvas) and set:
+  texture.magFilter = THREE.NearestFilter
+  texture.minFilter = THREE.NearestFilter
+  texture.generateMipmaps = false
+
+========================
+B) TRACK: NORDSCHLEIFE-INSPIRED (NOT EXACT REPLICA)
+========================
+- Replace the current simple track with a long, complex closed-loop track inspired by Nürburgring Nordschleife:
+  - Many corners of varying radius
+  - long straights in between
+  - elevation changes (uphill/downhill segments)
+- IMPORTANT: Do not claim it is an exact Nürburgring replica; name it something like:
+  "Green Loop" or "Nord Loop".
+- Implement track using a spline/curve path and generate the road mesh along it.
+- Add elevation by varying Y along the spline (smooth slopes).
+- Place barriers along both sides of the road following the spline.
+
+========================
+C) DRIVING BEHAVIOR: REMOVE AUTO PATH FOLLOW
+========================
+Right now the car seems to follow the track path automatically. Remove that.
+
+Required behavior:
+- Car should go straight when no steering keys are pressed.
+- Car should ONLY turn when A/D or Left/Right is pressed.
+- If the player does not steer, the car should drive straight and crash into the barriers at turns.
+- Keep the current "feel" (acceleration, grip) as much as possible.
+
+Implementation notes:
+- The car should be driven by its own forward direction and steering input (yaw).
+- Do NOT project the car back onto the spline centerline.
+- Collision:
+  - Barriers should be colliders; if car hits barrier, stop/slide along barrier with some bounce/damping.
+  - Keep it simple (AABB or distance-to-barrier segments) but must visibly prevent leaving track.
+
+========================
+D) CAMERA: KEEP ACCEL ZOOM-OUT + ADD BRAKE ZOOM-IN
+========================
+- Keep the existing effect: when accelerating, camera zooms out slightly.
+- Add the opposite effect: when braking, camera zooms IN slightly.
+- Smooth transitions (lerp), no sudden snaps.
+- Use braking input strength to drive zoom-in intensity.
+
+Example idea:
+- base distance = 8
+- when throttle pressed: distance -> 9.5
+- when brake pressed: distance -> 6.8
+- lerp each frame
+
+========================
+E) KEEP EVERYTHING ELSE WORKING
+========================
+- Keep keyboard controls exactly the same (WASD/arrows).
+- Keep lap timer + best session timer.
+- Keep dashboard controls affecting car behavior.
+- Keep performance smooth and stable.
