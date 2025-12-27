@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useLaps } from "@/hooks/use-laps";
-import { formatTime } from "@/lib/utils"; // We'll need to define this or just helper here
 
 const formatMs = (ms: number) => {
   const mins = Math.floor(ms / 60000);
@@ -91,7 +90,7 @@ export function Dashboard() {
             label="ENGINE POWER (HP)" 
             value={[settings.horsepower]} 
             min={100} max={1200} step={10}
-            onChange={([v]) => updateSettings({ horsepower: v })}
+            onChange={([v]: number[]) => updateSettings({ horsepower: v })}
             suffix=" HP"
           />
           
@@ -99,7 +98,7 @@ export function Dashboard() {
             label="TRACTION CONTROL (TCS)" 
             value={[settings.tractionControl * 100]} 
             min={0} max={100} step={1}
-            onChange={([v]) => updateSettings({ tractionControl: v / 100 })}
+            onChange={([v]: number[]) => updateSettings({ tractionControl: v / 100 })}
             suffix="%"
             colorClass="bg-secondary"
           />
@@ -108,7 +107,7 @@ export function Dashboard() {
             label="STABILITY (ESP)" 
             value={[settings.esp * 100]} 
             min={0} max={100} step={1}
-            onChange={([v]) => updateSettings({ esp: v / 100 })}
+            onChange={([v]: number[]) => updateSettings({ esp: v / 100 })}
             suffix="%"
             colorClass="bg-secondary"
           />
@@ -117,7 +116,7 @@ export function Dashboard() {
             label="BRAKE BIAS (F-R)" 
             value={[settings.brakeBias * 100]} 
             min={0} max={100} step={1}
-            onChange={([v]) => updateSettings({ brakeBias: v / 100 })}
+            onChange={([v]: number[]) => updateSettings({ brakeBias: v / 100 })}
             suffix="%"
           />
         </div>
