@@ -1,283 +1,218 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGameStore } from "./GameStore";
 import { useCreateLap } from "@/hooks/use-laps";
 import { Button } from "@/components/ui/button";
+import {
+  createInitialPhysicsState,
+  updatePhysics,
+  type PhysicsState,
+} from "./PhysicsEngine";
+import {
+  generateTrackPoints,
+  Track,
+  StartFinishLine,
+  TrackBarriers,
+  TRACK_WIDTH,
+} from "./TrackBuilder";
+import { GroundTerrain, SandTraps, GrassPatches } from "./TerrainSystem";
+import { TrackSideObjects } from "./TrackObjects";
 
-// --- Constants & Config ---
-const TRACK_RADIUS = 80;
-const TRACK_WIDTH = 12;
 const CAR_LENGTH = 3;
 const CAR_WIDTH = 1.6;
 
-// --- Helper: Procedural Texture for Road ---
-function createRoadTexture() {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return new THREE.CanvasTexture(canvas);
-
-  // Asphalt base
-  ctx.fillStyle = "#222222"; // Slightly lighter than background
-  ctx.fillRect(0, 0, 512, 512);
-
-  // Noise
-  for (let i = 0; i < 5000; i++) {
-    ctx.fillStyle = Math.random() > 0.5 ? "#2a2a2a" : "#1a1a1a";
-    ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
-  }
-
-  // Neon Side Lines
-  ctx.fillStyle = "#0ff"; // Cyan neon
-  ctx.fillRect(0, 0, 15, 512); // Left line
-  ctx.fillStyle = "#f0f"; // Magenta neon
-  ctx.fillRect(497, 0, 15, 512); // Right line
-  
-  // Center dashed line
-  ctx.fillStyle = "#555";
-  for(let i=0; i<512; i+=40) {
-    ctx.fillRect(254, i, 4, 20);
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(1, 20); // Repeat along track length
-  return texture;
-}
-
-// --- Components ---
-
-function Track() {
-  const textureRef = useRef<THREE.CanvasTexture>(null);
-  
-  if (!textureRef.current) {
-    // @ts-ignore
-    textureRef.current = createRoadTexture();
-  }
-
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      {/* Simple Ring Track */}
-      <ringGeometry args={[TRACK_RADIUS - TRACK_WIDTH/2, TRACK_RADIUS + TRACK_WIDTH/2, 128]} />
-      <meshStandardMaterial 
-        map={textureRef.current} 
-        roughness={0.8}
-        metalness={0.2}
-      />
-    </mesh>
-  );
-}
-
-function GridFloor() {
-  return (
-    <gridHelper 
-      args={[1000, 100, 0xff00ff, 0x111111]} 
-      position={[0, -0.1, 0]} 
-    />
-  );
-}
-
 function Car({ carRef }: { carRef: React.MutableRefObject<THREE.Group | null> }) {
   return (
-    <group ref={carRef} position={[TRACK_RADIUS, 0.5, 0]}>
-      {/* Chassis - Red/Neon Magenta */}
+    <group ref={carRef} position={[0, 0.5, -80]}>
       <mesh position={[0, 0.3, 0]} castShadow>
         <boxGeometry args={[CAR_WIDTH, 0.6, CAR_LENGTH]} />
-        <meshStandardMaterial 
-          color="#ff00ff" 
-          emissive="#330033" 
-          roughness={0.2} 
-          metalness={0.8} 
+        <meshStandardMaterial
+          color="#ff00ff"
+          emissive="#330033"
+          roughness={0.2}
+          metalness={0.8}
         />
       </mesh>
-      
-      {/* Cabin/Roof - clearly visible top */}
       <mesh position={[0, 0.75, -0.2]} castShadow>
         <boxGeometry args={[CAR_WIDTH - 0.2, 0.45, CAR_LENGTH - 1.2]} />
         <meshStandardMaterial color="#111" roughness={0.0} metalness={1.0} />
       </mesh>
-      
-      {/* Headlights */}
-      <mesh position={[0.5, 0.3, CAR_LENGTH/2]} rotation={[0,0,0]}>
-         <boxGeometry args={[0.3, 0.1, 0.1]} />
-         <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={5} />
+      <mesh position={[0.5, 0.3, CAR_LENGTH / 2]}>
+        <boxGeometry args={[0.3, 0.1, 0.1]} />
+        <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={5} />
       </mesh>
-      <mesh position={[-0.5, 0.3, CAR_LENGTH/2]}>
-         <boxGeometry args={[0.3, 0.1, 0.1]} />
-         <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={5} />
+      <mesh position={[-0.5, 0.3, CAR_LENGTH / 2]}>
+        <boxGeometry args={[0.3, 0.1, 0.1]} />
+        <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={5} />
       </mesh>
-      
-      {/* Taillights */}
-      <mesh position={[0.5, 0.4, -CAR_LENGTH/2]}>
-         <boxGeometry args={[0.3, 0.1, 0.1]} />
-         <meshStandardMaterial color="#f00" emissive="#f00" emissiveIntensity={3} />
+      <mesh position={[0.5, 0.4, -CAR_LENGTH / 2]}>
+        <boxGeometry args={[0.3, 0.1, 0.1]} />
+        <meshStandardMaterial color="#f00" emissive="#f00" emissiveIntensity={3} />
       </mesh>
-      <mesh position={[-0.5, 0.4, -CAR_LENGTH/2]}>
-         <boxGeometry args={[0.3, 0.1, 0.1]} />
-         <meshStandardMaterial color="#f00" emissive="#f00" emissiveIntensity={3} />
+      <mesh position={[-0.5, 0.4, -CAR_LENGTH / 2]}>
+        <boxGeometry args={[0.3, 0.1, 0.1]} />
+        <meshStandardMaterial color="#f00" emissive="#f00" emissiveIntensity={3} />
       </mesh>
-      
-      {/* Car specific lighting to ensure visibility */}
+      {[-0.65, 0.65].map((xOff) =>
+        [-0.9, 0.9].map((zOff) => (
+          <mesh key={`${xOff}-${zOff}`} position={[xOff, 0.15, zOff]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.2, 0.2, 0.15, 12]} />
+            <meshStandardMaterial color="#222" roughness={0.9} metalness={0.2} />
+          </mesh>
+        ))
+      )}
       <pointLight position={[0, 2, 0]} intensity={2} color="#ffffff" distance={10} />
     </group>
   );
 }
 
-// --- Game Logic Manager ---
 function GameController() {
   const { camera } = useThree();
   const carRef = useRef<THREE.Group>(null);
-  const keys = useRef<{ [key: string]: boolean }>({});
-  
-  // Physics State
-  const physics = useRef({
-    speed: 0,
-    angle: 0, // Position on the ring track (radians)
-    driftAngle: 0,
-    lateralOffset: 0, // Distance from center of track (- width/2 to + width/2)
-    lapStartTime: Date.now(),
-    currentLap: 0,
-    hasStarted: false,
-  });
+  const keys = useRef<Record<string, boolean>>({});
 
-  // Store access
-  const updateTelemetry = useGameStore(s => s.updateTelemetry);
-  const settings = useGameStore(s => s.settings);
+  const trackPoints = useMemo(() => generateTrackPoints(200), []);
+
+  const startPoint = trackPoints[0];
+  const nextPoint = trackPoints[1];
+  const startHeading = Math.atan2(
+    nextPoint.x - startPoint.x,
+    nextPoint.z - startPoint.z
+  );
+
+  const physicsRef = useRef<PhysicsState>(
+    createInitialPhysicsState(startPoint.x, startPoint.z, startHeading)
+  );
+
+  const updateTelemetry = useGameStore((s) => s.updateTelemetry);
+  const settings = useGameStore((s) => s.settings);
   const { mutate: saveLap } = useCreateLap();
 
-  // Input Listeners
   useEffect(() => {
-    const down = (e: KeyboardEvent) => keys.current[e.code] = true;
-    const up = (e: KeyboardEvent) => keys.current[e.code] = false;
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
+    const down = (e: KeyboardEvent) => {
+      keys.current[e.code] = true;
+    };
+    const up = (e: KeyboardEvent) => {
+      keys.current[e.code] = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
     return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
     };
   }, []);
 
-  // Physics Loop
+  const prevLapRef = useRef(0);
+
   useFrame((_, delta) => {
     if (!carRef.current) return;
-    
-    const p = physics.current;
-    const dt = Math.min(delta, 0.1); // Cap delta to prevent glitches
-    
-    // --- 1. Input Handling ---
-    const throttle = (keys.current['KeyW'] || keys.current['ArrowUp']) ? 1 : 0;
-    const brake = (keys.current['KeyS'] || keys.current['ArrowDown']) ? 1 : 0;
-    const steer = (keys.current['KeyA'] || keys.current['ArrowLeft']) ? 1 : 
-                  (keys.current['KeyD'] || keys.current['ArrowRight']) ? -1 : 0;
 
-    // --- 2. Physics Model ---
-    
-    // Power & Drag
-    const maxSpeed = settings.horsepower * 0.6 * (settings.drs ? 1.2 : 1.0) + (settings.ers ? 50 : 0);
-    const accelForce = (settings.horsepower / 20) * throttle * (settings.ers ? 1.5 : 1.0);
-    const brakeForce = settings.driveMode === 'drift' ? 80 : 120;
-    const drag = p.speed * 0.02 * (settings.drs ? 0.5 : 1.0);
-    const rollingResist = 5;
+    const throttle =
+      keys.current["KeyW"] || keys.current["ArrowUp"] ? 1 : 0;
+    const brake =
+      keys.current["KeyS"] || keys.current["ArrowDown"] ? 1 : 0;
+    const steer =
+      (keys.current["KeyA"] || keys.current["ArrowLeft"] ? -1 : 0) +
+      (keys.current["KeyD"] || keys.current["ArrowRight"] ? 1 : 0);
 
-    // Apply forces
-    if (throttle > 0) {
-      const maxAccel = 100 * (0.2 + 0.8 * settings.tractionControl);
-      const effectiveAccel = Math.min(accelForce, maxAccel);
-      p.speed += effectiveAccel * dt;
-    }
-    
-    if (brake > 0) {
-      p.speed -= brakeForce * dt;
-    }
-    
-    p.speed -= (drag + rollingResist) * dt;
-    if (p.speed < 0) p.speed = 0;
-    if (p.speed > maxSpeed) p.speed = maxSpeed;
+    const newState = updatePhysics(
+      physicsRef.current,
+      delta,
+      throttle,
+      brake,
+      steer,
+      settings,
+      trackPoints,
+      TRACK_WIDTH
+    );
+    physicsRef.current = newState;
 
-    // Steering & Drifting
-    const steerSens = 1.5;
-    const grip = settings.driveMode === 'drift' ? 0.95 : 0.99;
-    
-    let turnRate = steer * steerSens * dt;
-    const driftThreshold = 0.6 * settings.esp;
-    if (Math.abs(turnRate) > 0.02 && p.speed > 50 && Math.random() > grip) {
-        p.driftAngle += turnRate * 2; 
-    } else {
-        p.driftAngle *= 0.95; 
-    }
-    p.driftAngle = Math.max(Math.min(p.driftAngle, 0.5), -0.5);
-    
-    const angularVelocity = (p.speed / 3.6) / TRACK_RADIUS;
-    p.angle += angularVelocity * dt;
-    
-    p.lateralOffset += steer * (p.speed / 50) * dt * 5;
-    p.lateralOffset = Math.max(Math.min(p.lateralOffset, TRACK_WIDTH/2 - 1.5), -(TRACK_WIDTH/2 - 1.5));
+    carRef.current.position.set(newState.posX, 0.5, newState.posZ);
+    carRef.current.rotation.y = -newState.heading + newState.driftAngle * 0.5;
 
-    // --- 3. Position Update ---
-    const r = TRACK_RADIUS + p.lateralOffset;
-    const x = r * Math.cos(p.angle);
-    const z = r * Math.sin(p.angle);
-    carRef.current.position.set(x, 0.5, z);
-    
-    const tangent = p.angle + Math.PI / 2;
-    carRef.current.rotation.y = -tangent + p.driftAngle;
-    
-    // --- 4. Camera Follow (Rear Chase View) ---
-    // Fix: distance behind (-7 to -9), height (+3 to +4)
-    const camDistBehind = 8;
-    const camHeightAbove = 3.5;
-    
-    // Position behind the car relative to its tangent
-    const targetCamX = x - Math.cos(tangent) * camDistBehind;
-    const targetCamZ = z - Math.sin(tangent) * camDistBehind;
-    const targetCamY = camHeightAbove;
-    
-    // Smooth follow
-    camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.1);
-    
-    // Look slightly ahead of the car
-    const lookAheadDist = 5;
-    const lookAtX = x + Math.cos(tangent) * lookAheadDist;
-    const lookAtZ = z + Math.sin(tangent) * lookAheadDist;
-    camera.lookAt(lookAtX, 1, lookAtZ);
+    const camDist = 10;
+    const camHeight = 4;
+    const behindX = newState.posX - Math.sin(newState.heading) * camDist;
+    const behindZ = newState.posZ - Math.cos(newState.heading) * camDist;
+    camera.position.lerp(new THREE.Vector3(behindX, camHeight, behindZ), 0.08);
 
-    // --- 5. Lap Timing & Telemetry ---
+    const lookAhead = 8;
+    const aheadX = newState.posX + Math.sin(newState.heading) * lookAhead;
+    const aheadZ = newState.posZ + Math.cos(newState.heading) * lookAhead;
+    camera.lookAt(aheadX, 1, aheadZ);
+
     const now = Date.now();
-    const currentLapTime = now - p.lapStartTime;
-    
-    if (p.angle >= Math.PI * 2 * (p.currentLap + 1)) {
-        p.currentLap++;
-        const lapTimeMs = currentLapTime;
-        saveLap({ 
-          lapTimeMs, 
-          displayTime: new Date(lapTimeMs).toISOString().slice(14, 23)
-        });
-        p.lapStartTime = now;
-        const currentBest = useGameStore.getState().telemetry.bestLapTime;
-        if (currentBest === 0 || lapTimeMs < currentBest) {
-           updateTelemetry({ bestLapTime: lapTimeMs });
-        }
+    const currentLapTime = now - newState.lapStartTime;
+
+    if (newState.currentLap > prevLapRef.current) {
+      prevLapRef.current = newState.currentLap;
+      const lapTimeMs = currentLapTime;
+      saveLap({
+        lapTimeMs,
+        displayTime: new Date(lapTimeMs).toISOString().slice(14, 23),
+      });
+      const currentBest = useGameStore.getState().telemetry.bestLapTime;
+      if (currentBest === 0 || lapTimeMs < currentBest) {
+        updateTelemetry({ bestLapTime: lapTimeMs });
+      }
     }
 
     updateTelemetry({
-      speed: Math.abs(p.speed),
-      gear: Math.min(6, Math.max(1, Math.floor(Math.abs(p.speed) / 40) + 1)),
-      rpm: (Math.abs(p.speed) % 40) * 200 + 1000,
+      speed: Math.abs(newState.speed),
+      gear: Math.min(6, Math.max(1, Math.floor(Math.abs(newState.speed) / 40) + 1)),
+      rpm: (Math.abs(newState.speed) % 40) * 200 + 1000,
       lapTime: currentLapTime,
+      throttle,
+      brake,
+      absActive: newState.absActive,
+      tcsActive: newState.tcsActive,
+      espActive: newState.espActive,
+      onGrass: newState.onGrass,
+      driftAngle: newState.driftAngle,
+      currentLap: newState.currentLap,
     });
   });
+
+  const sandTrapPositions = useMemo(() => {
+    const positions: { x: number; z: number; scaleX: number; scaleZ: number; rotation: number }[] = [];
+    const indices = [30, 80, 130, 170];
+    for (const idx of indices) {
+      if (idx >= trackPoints.length) continue;
+      const pt = trackPoints[idx];
+      const next = trackPoints[(idx + 1) % trackPoints.length];
+      const dx = next.x - pt.x;
+      const dz = next.z - pt.z;
+      const len = Math.sqrt(dx * dx + dz * dz);
+      if (len === 0) continue;
+      const nx = -dz / len;
+      const nz = dx / len;
+      const offset = TRACK_WIDTH / 2 + 6;
+      positions.push({
+        x: pt.x + nx * offset,
+        z: pt.z + nz * offset,
+        scaleX: 10 + Math.random() * 5,
+        scaleZ: 6 + Math.random() * 4,
+        rotation: Math.atan2(dx, dz),
+      });
+    }
+    return positions;
+  }, [trackPoints]);
 
   return (
     <>
       <Car carRef={carRef} />
-      <Track />
+      <Track trackPoints={trackPoints} />
+      <StartFinishLine trackPoints={trackPoints} />
+      <TrackBarriers trackPoints={trackPoints} />
+      <GroundTerrain />
+      <SandTraps positions={sandTrapPositions} />
+      <GrassPatches />
+      <TrackSideObjects trackPoints={trackPoints} />
     </>
   );
 }
-
 
 export default function RacingGame() {
   const [gameState, setGameState] = useState<"landing" | "playing">("landing");
@@ -286,19 +221,16 @@ export default function RacingGame() {
     return (
       <div className="landing-screen crt-overlay">
         <h1 className="landing-title">RACING SIM</h1>
-        
-        <div className="landing-attribution">
-          by Manish Sai Yella
-        </div>
 
-        <Button 
+        <div className="landing-attribution">by Manish Sai Yella</div>
+
+        <Button
           onClick={() => setGameState("playing")}
           className="landing-next-btn font-arcade no-default-hover-elevate"
         >
           NEXT ▶
         </Button>
 
-        {/* Retro scanline bg effect */}
         <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-purple-500/5 to-transparent bg-[length:100%_20px]" />
       </div>
     );
@@ -306,34 +238,62 @@ export default function RacingGame() {
 
   return (
     <div className="w-full h-full relative bg-black crt-overlay">
-      <Canvas 
-        shadows 
-        dpr={[1, 2]} 
-        gl={{ antialias: false }}
-        camera={{ position: [0, 5, 10], fov: 50 }}
+      <Canvas
+        shadows
+        dpr={[1, 2]}
+        gl={{ antialias: true }}
+        camera={{ position: [0, 5, 10], fov: 55 }}
       >
-        {/* Environment Lighting */}
-        <ambientLight intensity={0.5} />
-        <directionalLight 
-          position={[0, 10, -5]} 
-          intensity={1.5} 
-          castShadow 
-          shadow-mapSize={[1024, 1024]}
+        <ambientLight intensity={0.4} />
+        <directionalLight
+          position={[50, 80, -30]}
+          intensity={1.8}
+          castShadow
+          shadow-mapSize={[2048, 2048]}
         />
-        <pointLight position={[0, 50, 0]} intensity={1} color="#4400ff" />
-        
-        {/* Fog for distance hiding */}
-        <fog attach="fog" args={['#000000', 30, 150]} />
-        
-        {/* Game Content */}
+        <hemisphereLight args={["#87ceeb", "#2a5a2a", 0.3]} />
+        <pointLight position={[0, 60, 0]} intensity={0.5} color="#4400ff" />
+
+        <fog attach="fog" args={["#1a2a1a", 60, 250]} />
+
         <GameController />
-        <GridFloor />
       </Canvas>
-      
-      {/* Overlay Instructions */}
-      <div className="absolute top-4 left-4 font-arcade text-white/50 text-xs z-10 pointer-events-none">
-        <p>WASD / ARROWS to Drive</p>
+
+      <div className="absolute top-4 left-4 font-arcade text-white/50 text-xs z-10 pointer-events-none space-y-1">
+        <p>W/S or ↑/↓ - Accelerate/Brake</p>
+        <p>A/D or ←/→ - Steer</p>
       </div>
+
+      <HudOverlay />
+    </div>
+  );
+}
+
+function HudOverlay() {
+  const telemetry = useGameStore((s) => s.telemetry);
+
+  return (
+    <div className="absolute bottom-4 left-4 z-10 pointer-events-none flex gap-3">
+      {telemetry.absActive && (
+        <div className="bg-yellow-500/80 text-black font-arcade text-xs px-3 py-1 rounded animate-pulse">
+          ABS
+        </div>
+      )}
+      {telemetry.tcsActive && (
+        <div className="bg-orange-500/80 text-black font-arcade text-xs px-3 py-1 rounded animate-pulse">
+          TCS
+        </div>
+      )}
+      {telemetry.espActive && (
+        <div className="bg-blue-500/80 text-white font-arcade text-xs px-3 py-1 rounded animate-pulse">
+          ESP
+        </div>
+      )}
+      {telemetry.onGrass && (
+        <div className="bg-green-600/80 text-white font-arcade text-xs px-3 py-1 rounded">
+          OFF TRACK
+        </div>
+      )}
     </div>
   );
 }
