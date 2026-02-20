@@ -161,7 +161,7 @@ export function StartFinishLine({ trackPoints }: { trackPoints: TrackSplinePoint
 export function TrackBarriers({ trackPoints }: { trackPoints: TrackSplinePoint[] }) {
   const barriers = useMemo(() => {
     const items: { x: number; z: number; angle: number; side: number }[] = [];
-    const step = 4;
+    const step = 2;
     for (let i = 0; i < trackPoints.length; i += step) {
       const curr = trackPoints[i];
       const next = trackPoints[(i + 1) % trackPoints.length];
@@ -172,7 +172,7 @@ export function TrackBarriers({ trackPoints }: { trackPoints: TrackSplinePoint[]
       const nx = -dz / len;
       const nz = dx / len;
       const angle = Math.atan2(dx, dz);
-      const offset = TRACK_WIDTH / 2 + 0.8;
+      const offset = TRACK_WIDTH / 2 + 0.5;
       items.push({ x: curr.x + nx * offset, z: curr.z + nz * offset, angle, side: 1 });
       items.push({ x: curr.x - nx * offset, z: curr.z - nz * offset, angle, side: -1 });
     }
@@ -184,16 +184,16 @@ export function TrackBarriers({ trackPoints }: { trackPoints: TrackSplinePoint[]
       {barriers.map((b, i) => (
         <mesh
           key={i}
-          position={[b.x, 0.4, b.z]}
+          position={[b.x, 0.5, b.z]}
           rotation={[0, b.angle, 0]}
           castShadow
         >
-          <boxGeometry args={[0.3, 0.8, 3]} />
+          <boxGeometry args={[0.5, 1.0, 2]} />
           <meshStandardMaterial
-            color={b.side > 0 ? "#ff0044" : "#0088ff"}
-            emissive={b.side > 0 ? "#330011" : "#001133"}
-            roughness={0.6}
-            metalness={0.4}
+            color={b.side > 0 ? "#cc0033" : "#0066cc"}
+            emissive={b.side > 0 ? "#440011" : "#001144"}
+            roughness={0.5}
+            metalness={0.5}
           />
         </mesh>
       ))}

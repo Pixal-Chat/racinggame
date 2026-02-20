@@ -85,7 +85,7 @@ export function TrackSideObjects({ trackPoints }: { trackPoints: TrackSplinePoin
     const tireStacks: { x: number; z: number }[] = [];
     const grandstands: { x: number; z: number; angle: number }[] = [];
 
-    for (let i = 0; i < trackPoints.length; i += 8) {
+    for (let i = 0; i < trackPoints.length; i += 12) {
       const curr = trackPoints[i];
       const next = trackPoints[(i + 1) % trackPoints.length];
       const dx = next.x - curr.x;
@@ -96,16 +96,16 @@ export function TrackSideObjects({ trackPoints }: { trackPoints: TrackSplinePoin
       const nz = dx / len;
       const angle = Math.atan2(dx, dz);
 
-      const treeOffset = TRACK_WIDTH / 2 + 8 + Math.random() * 15;
-      const side = i % 16 < 8 ? 1 : -1;
+      const treeOffset = TRACK_WIDTH / 2 + 12 + (i * 7) % 10;
+      const side = i % 24 < 12 ? 1 : -1;
       trees.push({
         x: curr.x + nx * treeOffset * side,
         z: curr.z + nz * treeOffset * side,
-        scale: 0.8 + Math.random() * 0.6,
+        scale: 0.9 + (i * 3) % 5 * 0.1,
       });
 
-      if (i % 16 === 0) {
-        const lightOffset = TRACK_WIDTH / 2 + 2;
+      if (i % 24 === 0) {
+        const lightOffset = TRACK_WIDTH / 2 + 3;
         lights.push({
           x: curr.x + nx * lightOffset,
           z: curr.z + nz * lightOffset,
