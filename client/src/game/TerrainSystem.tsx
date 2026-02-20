@@ -7,36 +7,25 @@ function createGrassTexture(): THREE.CanvasTexture {
   canvas.height = 512;
   const ctx = canvas.getContext("2d")!;
 
-  ctx.fillStyle = "#1a3a1a";
+  ctx.fillStyle = "#1e4a1e";
   ctx.fillRect(0, 0, 512, 512);
 
-  for (let i = 0; i < 8000; i++) {
+  for (let i = 0; i < 3000; i++) {
     const shade = Math.random();
     if (shade > 0.7) {
-      ctx.fillStyle = "#2a5a2a";
+      ctx.fillStyle = "#255525";
     } else if (shade > 0.4) {
       ctx.fillStyle = "#1d4d1d";
     } else {
-      ctx.fillStyle = "#153515";
+      ctx.fillStyle = "#1a421a";
     }
-    ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 3);
-  }
-
-  for (let i = 0; i < 2000; i++) {
-    ctx.strokeStyle = `rgba(40, 80, 40, ${0.3 + Math.random() * 0.3})`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    const x = Math.random() * 512;
-    const y = Math.random() * 512;
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + (Math.random() - 0.5) * 3, y - 3 - Math.random() * 5);
-    ctx.stroke();
+    ctx.fillRect(Math.random() * 512, Math.random() * 512, 3, 3);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(80, 80);
+  texture.repeat.set(60, 60);
   return texture;
 }
 
@@ -108,14 +97,15 @@ export function SandTraps({
 
 export function GrassPatches() {
   const patches = useMemo(() => {
-    const items: { x: number; z: number; scale: number }[] = [];
-    for (let i = 0; i < 120; i++) {
+    const items: { x: number; z: number; scale: number; rot: number }[] = [];
+    for (let i = 0; i < 40; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = 40 + Math.random() * 200;
+      const radius = 60 + Math.random() * 150;
       items.push({
         x: Math.cos(angle) * radius,
         z: Math.sin(angle) * radius,
-        scale: 0.5 + Math.random() * 1.5,
+        scale: 2 + Math.random() * 4,
+        rot: Math.random() * Math.PI,
       });
     }
     return items;
@@ -124,9 +114,9 @@ export function GrassPatches() {
   return (
     <group>
       {patches.map((p, i) => (
-        <mesh key={i} position={[p.x, 0.01, p.z]} rotation={[-Math.PI / 2, 0, Math.random() * Math.PI]}>
-          <circleGeometry args={[p.scale, 8]} />
-          <meshStandardMaterial color="#1a4a1a" transparent opacity={0.6} />
+        <mesh key={i} position={[p.x, 0.01, p.z]} rotation={[-Math.PI / 2, 0, p.rot]}>
+          <circleGeometry args={[p.scale, 12]} />
+          <meshStandardMaterial color="#1a4a1a" transparent opacity={0.35} />
         </mesh>
       ))}
     </group>

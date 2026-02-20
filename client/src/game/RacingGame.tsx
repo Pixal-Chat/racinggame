@@ -19,6 +19,10 @@ import {
 import { GroundTerrain, SandTraps, GrassPatches } from "./TerrainSystem";
 import { TrackSideObjects } from "./TrackObjects";
 
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
 const CAR_LENGTH = 3;
 const CAR_WIDTH = 1.6;
 
@@ -129,19 +133,31 @@ function GameController() {
     );
     physicsRef.current = newState;
 
-    carRef.current.position.set(newState.posX, 0.5, newState.posZ);
-    carRef.current.rotation.y = -newState.heading + newState.driftAngle * 0.5;
+    carRef.current.position.lerp(
+      new THREE.Vector3(newState.posX, 0.5, newState.posZ),
+      0.4
+    );
+    const targetCarRot = -newState.smoothHeading + newState.driftAngle * 0.3;
+    carRef.current.rotation.y = lerp(
+      carRef.current.rotation.y,
+      targetCarRot,
+      0.2
+    );
 
-    const camDist = 10;
-    const camHeight = 4;
-    const behindX = newState.posX - Math.sin(newState.heading) * camDist;
-    const behindZ = newState.posZ - Math.cos(newState.heading) * camDist;
-    camera.position.lerp(new THREE.Vector3(behindX, camHeight, behindZ), 0.08);
+    const camDist = 12;
+    const camHeight = 5;
+    const camHeading = newState.smoothHeading;
+    const behindX = newState.posX - Math.sin(camHeading) * camDist;
+    const behindZ = newState.posZ - Math.cos(camHeading) * camDist;
+    camera.position.lerp(new THREE.Vector3(behindX, camHeight, behindZ), 0.06);
 
-    const lookAhead = 8;
-    const aheadX = newState.posX + Math.sin(newState.heading) * lookAhead;
-    const aheadZ = newState.posZ + Math.cos(newState.heading) * lookAhead;
-    camera.lookAt(aheadX, 1, aheadZ);
+    const lookAhead = 10;
+    const aheadX = newState.posX + Math.sin(camHeading) * lookAhead;
+    const aheadZ = newState.posZ + Math.cos(camHeading) * lookAhead;
+    const lookTarget = new THREE.Vector3(aheadX, 1, aheadZ);
+    const currentLook = new THREE.Vector3();
+    camera.getWorldDirection(currentLook);
+    camera.lookAt(lookTarget);
 
     const now = Date.now();
     const currentLapTime = now - newState.lapStartTime;
@@ -244,17 +260,16 @@ export default function RacingGame() {
         gl={{ antialias: true }}
         camera={{ position: [0, 5, 10], fov: 55 }}
       >
-        <ambientLight intensity={0.4} />
+        <ambientLight intensity={0.5} />
         <directionalLight
-          position={[50, 80, -30]}
-          intensity={1.8}
+          position={[50, 100, -30]}
+          intensity={1.5}
           castShadow
           shadow-mapSize={[2048, 2048]}
         />
-        <hemisphereLight args={["#87ceeb", "#2a5a2a", 0.3]} />
-        <pointLight position={[0, 60, 0]} intensity={0.5} color="#4400ff" />
+        <hemisphereLight args={["#87ceeb", "#2a5a2a", 0.4]} />
 
-        <fog attach="fog" args={["#1a2a1a", 60, 250]} />
+        <fog attach="fog" args={["#1a2a1a", 80, 300]} />
 
         <GameController />
       </Canvas>

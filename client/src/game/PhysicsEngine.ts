@@ -16,6 +16,7 @@ export interface PhysicsState {
   trackProgress: number;
   currentLap: number;
   lapStartTime: number;
+  smoothHeading: number;
 }
 
 export interface TrackSplinePoint {
@@ -40,6 +41,7 @@ export function createInitialPhysicsState(startX: number, startZ: number, headin
     trackProgress: 0,
     currentLap: 0,
     lapStartTime: Date.now(),
+    smoothHeading: heading,
   };
 }
 
@@ -51,13 +53,15 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-export function isOnTrack(
+export function distanceToTrack(
   px: number,
   pz: number,
-  trackPoints: TrackSplinePoint[],
-  trackWidth: number
-): boolean {
+  trackPoints: TrackSplinePoint[]
+): { dist: number; closestX: number; closestZ: number; segIdx: number } {
   let minDist = Infinity;
+  let bestX = px;
+  let bestZ = pz;
+  let bestIdx = 0;
   for (let i = 0; i < trackPoints.length; i++) {
     const next = (i + 1) % trackPoints.length;
     const ax = trackPoints[i].x;
@@ -77,9 +81,23 @@ export function isOnTrack(
     const dx = px - closestX;
     const dz = pz - closestZ;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < minDist) minDist = dist;
+    if (dist < minDist) {
+      minDist = dist;
+      bestX = closestX;
+      bestZ = closestZ;
+      bestIdx = i;
+    }
   }
-  return minDist < trackWidth / 2;
+  return { dist: minDist, closestX: bestX, closestZ: bestZ, segIdx: bestIdx };
+}
+
+export function isOnTrack(
+  px: number,
+  pz: number,
+  trackPoints: TrackSplinePoint[],
+  trackWidth: number
+): boolean {
+  return distanceToTrack(px, pz, trackPoints).dist < trackWidth / 2;
 }
 
 export function findClosestTrackIndex(
@@ -112,14 +130,15 @@ export function updatePhysics(
   trackWidth: number
 ): PhysicsState {
   const s = { ...state };
-  const cappedDt = Math.min(dt, 0.05);
+  const cappedDt = Math.min(dt, 0.033);
 
-  const onTrack = isOnTrack(s.posX, s.posZ, trackPoints, trackWidth);
+  const trackInfo = distanceToTrack(s.posX, s.posZ, trackPoints);
+  const onTrack = trackInfo.dist < trackWidth / 2;
   s.onGrass = !onTrack;
 
-  const surfaceGrip = onTrack ? 1.0 : 0.45;
-  const surfaceDrag = onTrack ? 1.0 : 2.5;
-  const surfaceRolling = onTrack ? 1.0 : 3.0;
+  const surfaceGrip = onTrack ? 1.0 : 0.5;
+  const surfaceDrag = onTrack ? 1.0 : 2.0;
+  const surfaceRolling = onTrack ? 1.0 : 2.5;
 
   const massKg = settings.weight;
   const massMultiplier = 1400 / massKg;
@@ -168,35 +187,38 @@ export function updatePhysics(
 
   const downforceGrip = 1.0 + settings.downforce * (s.speed / maxSpeed) * 0.4;
   const gripLevel = surfaceGrip * downforceGrip;
-  const steerSens = settings.steeringSensitivity * 2.5;
-  const speedSteerReduction = 1.0 / (1.0 + s.speed * 0.004);
-  const turnRate = steerInput * steerSens * speedSteerReduction * cappedDt;
+  const steerSens = settings.steeringSensitivity * 2.2;
+  const speedSteerReduction = 1.0 / (1.0 + s.speed * 0.005);
+  const targetTurnRate = steerInput * steerSens * speedSteerReduction * cappedDt;
 
   if (s.speed > 2) {
-    s.heading += turnRate * gripLevel;
+    s.heading += targetTurnRate * gripLevel;
   }
+
+  s.smoothHeading = lerp(s.smoothHeading, s.heading, 0.15);
 
   const isDriftMode = settings.driveMode === 'drift';
-  const driftGrip = isDriftMode ? 0.88 : 0.96;
-  const driftTriggerSpeed = isDriftMode ? 30 : 60;
+  const driftGrip = isDriftMode ? 0.90 : 0.995;
+  const driftTriggerSpeed = isDriftMode ? 30 : 120;
 
-  if (Math.abs(steerInput) > 0.1 && s.speed > driftTriggerSpeed) {
-    const driftForce = steerInput * (1 - driftGrip) * (s.speed / 100) * cappedDt * 3;
+  if (Math.abs(steerInput) > 0.3 && s.speed > driftTriggerSpeed) {
+    const driftForce = steerInput * (1 - driftGrip) * (s.speed / 150) * cappedDt * 1.5;
     s.driftAngle += driftForce;
   }
-  s.driftAngle *= isDriftMode ? 0.96 : 0.92;
-  s.driftAngle = clamp(s.driftAngle, -0.8, 0.8);
+  s.driftAngle *= isDriftMode ? 0.95 : 0.80;
+  if (Math.abs(s.driftAngle) < 0.005) s.driftAngle = 0;
+  s.driftAngle = clamp(s.driftAngle, -0.6, 0.6);
 
   let espActive = false;
-  if (settings.esp > 0 && Math.abs(s.driftAngle) > 0.15) {
-    const correction = s.driftAngle * settings.esp * 0.1 * cappedDt;
+  if (settings.esp > 0 && Math.abs(s.driftAngle) > 0.1) {
+    const correction = s.driftAngle * settings.esp * 0.15 * cappedDt;
     s.driftAngle -= correction;
-    s.speed *= (1 - settings.esp * 0.002);
+    s.speed *= (1 - settings.esp * 0.001);
     espActive = true;
   }
   s.espActive = espActive;
 
-  const suspensionDamping = lerp(0.85, 0.98, settings.suspension);
+  const suspensionDamping = lerp(0.92, 0.99, settings.suspension);
 
   const forwardX = Math.sin(s.heading);
   const forwardZ = Math.cos(s.heading);
@@ -204,12 +226,28 @@ export function updatePhysics(
   s.posX += forwardX * speedMs * cappedDt * suspensionDamping;
   s.posZ += forwardZ * speedMs * cappedDt * suspensionDamping;
 
-  if (s.driftAngle !== 0) {
+  if (Math.abs(s.driftAngle) > 0.01) {
     const lateralX = Math.sin(s.heading + Math.PI / 2);
     const lateralZ = Math.cos(s.heading + Math.PI / 2);
-    const lateralSlide = s.driftAngle * speedMs * cappedDt * 0.3;
+    const lateralSlide = s.driftAngle * speedMs * cappedDt * 0.08;
     s.posX += lateralX * lateralSlide;
     s.posZ += lateralZ * lateralSlide;
+  }
+
+  const barrierLimit = trackWidth / 2 + 0.5;
+  const postMoveTrack = distanceToTrack(s.posX, s.posZ, trackPoints);
+  if (postMoveTrack.dist > barrierLimit) {
+    const pushDx = s.posX - postMoveTrack.closestX;
+    const pushDz = s.posZ - postMoveTrack.closestZ;
+    const pushLen = Math.sqrt(pushDx * pushDx + pushDz * pushDz);
+    if (pushLen > 0) {
+      const nx = pushDx / pushLen;
+      const nz = pushDz / pushLen;
+      s.posX = postMoveTrack.closestX + nx * barrierLimit;
+      s.posZ = postMoveTrack.closestZ + nz * barrierLimit;
+      s.speed *= 0.6;
+      s.driftAngle *= 0.3;
+    }
   }
 
   const closestIdx = findClosestTrackIndex(s.posX, s.posZ, trackPoints);
